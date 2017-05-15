@@ -6,59 +6,82 @@ import os
 import csv
 
 currDir = os.getcwd()
+ETFPath = currDir + '\\ETFData\\'
 
-def getiSharesHoldings(selection):
-    if(selection=='iShare_MedDev'):
-        url= 'https://www.ishares.com/us/products/239516/ishares-us-medical-devices-etf/1467271812596.ajax?fileType=csv&fileName=IHI_holdings&dataType=fund'
-    elif(False):#placeholders
-        a=1
-    elif(False):
-        a=1
-    else:
-       print("Error in retrieving " + selection + " data")
-       return 0
-       
+#Given a pre-defined iShares ETF, this function returns a dataframe of the ETF holdings
+def getiSharesHoldings(name,url):
+    #Get CSV Link
+    resp = requests.get(url)
+    soup = BeautifulSoup(resp.content, "html.parser")
+    link = soup.find('a', string='Detailed Holdings and Analytics', href=True)
+    url = url+link['href']
+    
+    #Download CSV of holdings
     s=requests.get(url).text
     c=pd.read_csv(StringIO(s),skiprows=range(0,10))
-
     output = pd.concat([c['Ticker'], c['Weight (%)'],c['Asset Class']], axis=1)
-    """ For bug checking
-    for i,stock in output.iterrows():
-        print(stock)
-        print('-----------------')
-    """
+    output.name=name
+
+    #return ETF data
     return output
 
-def findNewAndUpdate(curHeldStocks):
-    filename = currDir + '/tickerList.csv'
-    oldStocks = pd.read_csv(filename)
-    newFrame = oldStocks.append(curHeldStocks)
+#Load ETF Holding Data
+def loadETFHolding(name):
+    importData = dirList = pd.read_csv(ETFPath + name + '.csv', header=0, index_col=0,encoding = "ISO-8859-1")
+    return importData
+
+#Load ETF Directory
+def loadETFDirectory():
+    dirList = pd.read_csv(ETFPath + 'directory.csv', header=0, index_col=0)
+    return dirList
+
+#Write to directory but make sure there are no duplicates
+def writeETFDirectory(dirList):
+    dirList=dirList.drop_duplicates()
+    dirList.to_csv(ETFPath + 'directory.csv')
+    return 0
+
+def addETFHolding(name, url):
+    #Try to get ETF Data first in case there is an error
+    ETFData=getiSharesHoldings(name,url)
     
+    #Update ETF Directory File
+    dirList = loadETFDirectory()
+    temp = pd.DataFrame(columns=['Names', 'URL'])
+    temp.loc[0]=[name,url]
+    dirList = dirList.append(temp, ignore_index=True)
+    writeETFDirectory(dirList)
 
-    newStocks = newFrame.drop_duplicates()
-
- 
-    newFrame.to_csv(filename)
-    return newStocks
-
-def getTickerHistory():
-
+    #update EFT File
+    ETFData.to_csv(ETFPath + name +'.csv')
     return 0
 
-def getStockPrices():
+def getAllStockTickers():
+    #create ticker list
+    tickerFrame = pd.DataFrame(columns=['Ticker'])
+    
+    #load ETF Directory File
+    dirList = pd.read_csv(ETFPath + 'directory.csv', header=0,index_col=0)
+    print(dirList)
+    
+    #loop through ETF database and add to running list of ALL tickers
+    for index, iRow in dirList.iterrows():
+        tempTickers = loadETFHolding(iRow['Names'])
+        tickerFrame = tickerFrame.append(tempTickers)
+    #remove duplicates
+    tickerFrame = tickerFrame.drop_duplicates()
+    
+    #return list of unique tickers
+    return pd.DataFrame((tickerFrame[tickerFrame['Asset Class'] == 'Equity'])['Ticker']).reset_index(drop=True)
 
+#update ETF Holdings
+def updateETFHoldings():
+    #load directory
+    dirList = loadETFDirectory()
+    
+    #get values from online & resave
+    for index, iRow in dirList.iterrows():
+        ETFData=getiSharesHoldings(iRow['Names'],iRow['URL'])
+        ETFData.to_csv(ETFPath + iRow['Names'] +'.csv')
     return 0
-
-#Get current ETF holdings
-currentHoldings = getiSharesHoldings('iShare_MedDev')
-
-#Get DF Column of Current Stocks (Equities)
-currentStocks = currentHoldings[currentHoldings['Asset Class'] == 'Equity']['Ticker']
-
-#Get a list of the new stocks
-#newStocks = findNewAndUpdate(currentStocks)
-
-page = requests.get('https://ca.finance.yahoo.com/quote/GOOG?ltr=1')
-soup = BeautifulSoup(page.content, 'html.parser')
-soup.find_all('span', class_='Trsdu(0.3s) Fw(b) Fz(36px) Mb(-4px) D(ib)')
 
