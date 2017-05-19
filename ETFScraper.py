@@ -62,7 +62,6 @@ def getAllStockTickers():
     
     #load ETF Directory File
     dirList = pd.read_csv(ETFPath + 'directory.csv', header=0,index_col=0)
-    print(dirList)
     
     #loop through ETF database and add to running list of ALL tickers
     for index, iRow in dirList.iterrows():
